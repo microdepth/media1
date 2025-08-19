@@ -12,7 +12,7 @@ extern "C" {
     #include <libavformat/avformat.h> // container format stuff
     #include <libavutil/avutil.h> // general util stuff
     #include <libavutil/pixdesc.h> // pixel format descriptions
-    #include <libavutil/imgutils.h> // image utility functions
+    #include <libavutil/imgutils.h> // image util functions
     #include <libswscale/swscale.h> // scaling and color space conversion
     #include <libswresample/swresample.h> // audio resampling
     #include <libavdevice/avdevice.h> // device handling
@@ -21,8 +21,7 @@ extern "C" {
 using namespace std;
 using namespace filesystem;
 
-// todo more functions
-
+// todo add conversion to different filetypes
 int save_image_as_bmp(const char* filename, AVFrame* pFrame, int width, int height) { // saves a frame to a bmp file
     if (stbi_write_bmp(filename, width, height, 3, pFrame->data[0]) == 0) {
         printf("failed to save image: %s\n", filename);
@@ -32,7 +31,7 @@ int save_image_as_bmp(const char* filename, AVFrame* pFrame, int width, int heig
     printf("saved image: %s\n", filename);
     return 0;
 }
-void clear_folder(string& folderPath) { // clears a directory (recursive)
+void clear_folder(string& folderPath) { // recursively clears a directory
     try { // try-catch block for file system errors
         if (exists(folderPath) && is_directory(folderPath)) {
             for (const auto& entry : directory_iterator(folderPath)) {
@@ -110,21 +109,18 @@ int main() {
     }
 
     // processing setup
-
-    AVPacket* pPacket = av_packet_alloc(); // allocating memory for a packet, which is an object that contains 1 or more encoded frames
+    AVPacket* pPacket = av_packet_alloc(); // allocating memory for a packet
     AVFrame* pFrame = av_frame_alloc(); // allocating memory for a frame which is going to hold the original decoded packet before transformations
-
-    AVFrame* pFrameRGB = av_frame_alloc(); // processes frame storage buffer
+    AVFrame* pFrameRGB = av_frame_alloc(); // frame storage buffer for post processing frame
 
     int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, pCodecContext->width, pCodecContext->height, 1); // number of bytes to contain a frame in a specific format. here its AV_PIX_FMT_RGB24
-    uint8_t* buffer = (uint8_t*) av_malloc(numBytes * sizeof(uint8_t)); // allocated buffer based on the number of bytes
+    uint8_t* buffer = (uint8_t*) av_malloc(numBytes * sizeof(uint8_t)); // allocated buffer based on the number of bytes in the frame
     av_image_fill_arrays(pFrameRGB->data, pFrameRGB->linesize, buffer, AV_PIX_FMT_RGB24, pCodecContext->width, pCodecContext->height, 1); // sets up pframergb pointers to reference to the buffer we just created based on the dimensions and pixel format
 
     char filename2[1024]; // filename
     int frame_number = 0; // frame number to print
 
     // processing loop
-
     while (av_read_frame(pFormatContext, pPacket) >= 0) { // reading a packet from the stream
         if (pPacket->stream_index == videoStreamIndex) { // checking if the packet we read is from the desired stream (video)
             if (avcodec_send_packet(pCodecContext, pPacket) < 0) { // sending the packet to be decoded into frames
@@ -139,11 +135,9 @@ int main() {
                     printf("error receiving decoded frame\n");
                     break;
                 }
-
                 printf("frame decoded\n");
 
                 // luminance loop
-
                 for (int y = 0; y < pCodecContext->height; ++y) { // loop through every row in the frame
                     for (int x = 0; x < pCodecContext->width; ++x) { // loop through every element in the row
                         // here we should be dealing with rgb pixels
@@ -165,7 +159,6 @@ int main() {
 
                 // todo reconstruct frames into mov
                 // saving to file
-
                 snprintf(filename2, sizeof(filename2), "frames/frame_%d.bmp", frame_number); // building a filename for our frame to save into our frames folder as a bmp
                 save_image_as_bmp(filename2, pFrameRGB, pCodecContext->width, pCodecContext->height); // saving our frame as a bmp image
 
@@ -177,7 +170,6 @@ int main() {
 
     // todo comment everything
     // building mov
-
     AVFormatContext* pOutputFormatContext = nullptr;
 
     avformat_alloc_output_context2(&pOutputFormatContext, nullptr, "mov", "output.mov");
